@@ -5,6 +5,8 @@ import requests
 from io import BytesIO
 from PIL import Image, ImageTk
 from sqlite.search_sqlite import SQLiteSearch
+from deck import Deck
+from card import Card
 
 
 class FabGui:
@@ -12,6 +14,8 @@ class FabGui:
         self.root = root
         self.root.title("Flesh and Blood - Generic Card Tool")
         self.root.geometry("1400x850")  # Widened to fit the image
+        self.current_deck = Deck(format_="CC")
+        self.setup_deck_ui()
 
         try:
             self.search_engine = SQLiteSearch()
@@ -31,6 +35,78 @@ class FabGui:
 
         self.setup_ui()
         self.perform_search()
+
+    def setup_deck_ui(self):
+        """Replaces Listbox with a Treeview for better quantity tracking."""
+        deck_frame = ttk.LabelFrame(self.root, text="Current Deck", padding=10)
+        deck_frame.pack(side="right", fill="both", padx=10)
+
+        # Create Treeview with Name and Qty columns
+        cols = ("name", "qty")
+        self.deck_tree = ttk.Treeview(deck_frame, columns=cols, show="headings", height=20)
+
+        self.deck_tree.heading("name", text="Card Name")
+        self.deck_tree.column("name", width=200)
+
+        self.deck_tree.heading("qty", text="Qty")
+        self.deck_tree.column("qty", width=50, anchor="center")
+
+        self.deck_tree.pack(pady=5, fill="both", expand=True)
+
+        # Buttons
+        ttk.Button(deck_frame, text="Add Selected to Deck", command=self.add_to_deck).pack(fill="x")
+        ttk.Button(deck_frame, text="Remove Selected", command=self.remove_from_deck).pack(fill="x", pady=2)
+        ttk.Button(deck_frame, text="Check Legality", command=self.check_deck).pack(fill="x", pady=5)
+
+    def add_to_deck(self):
+        selected_ids = self.tree.selection()
+        if not selected_ids:
+            return
+
+        for item_id in selected_ids:
+            card_name = self.tree.item(item_id)['values'][0]
+
+            # Fetch the full Card object for the deck logic
+            card_obj = self.get_card_object_by_name(card_name)
+            if card_obj:
+                # 1. Update the Logic (Deck Object)
+                self.current_deck.add_card(card_obj)
+
+                # 2. Update the UI (Deck Treeview)
+                self.refresh_deck_display()
+
+    def refresh_deck_display(self):
+        """Clears and repopulates the deck treeview based on the Deck object."""
+        # Clear current UI rows
+        for item in self.deck_tree.get_children():
+            self.deck_tree.delete(item)
+
+        # Add Hero at the top if set
+        if self.current_deck.hero:
+            self.deck_tree.insert("", "end", values=(f"⭐ {self.current_deck.hero.name}", 1), tags=('hero',))
+
+        # Add all other cards
+        for name, data in self.current_deck.cards.items():
+            self.deck_tree.insert("", "end", values=(name, data['qty']))
+
+    def get_card_object_by_name(self, name):
+        """Helper to fetch a full Card object from the database for the Deck logic."""
+        res = self.search_engine.conn.execute(
+            "SELECT * FROM cards WHERE name = ?", (name,)
+        ).fetchone()
+
+        if res:
+            # Convert the SQLite Row back into the dictionary format your Card class expects
+            return Card(dict(res))
+        return None
+
+    def check_deck(self):
+        is_legal, errors = self.current_deck.validate_legality()
+        if is_legal:
+            messagebox.showinfo("Legality Check", "Deck is LEGAL!")
+        else:
+            error_msg = "\n".join(errors)
+            messagebox.showwarning("Legality Check", f"Deck is ILLEGAL:\n\n{error_msg}")
 
     def setup_ui(self):
         # --- Left Side: Filters and Table ---
@@ -76,6 +152,26 @@ class FabGui:
 
         self.img_label = ttk.Label(self.preview_frame, text="Select a card to load image")
         self.img_label.pack(expand=True)
+
+    def remove_from_deck(self):
+        selected = self.deck_tree.selection()
+        if not selected:
+            return
+
+        for item_id in selected:
+            card_name = self.deck_tree.item(item_id)['values'][0]
+            # Clean hero tag if present
+            clean_name = card_name.replace("⭐ ", "")
+
+            # Update Logic: Decrement quantity or remove
+            if clean_name in self.current_deck.cards:
+                self.current_deck.cards[clean_name]['qty'] -= 1
+                if self.current_deck.cards[clean_name]['qty'] <= 0:
+                    del self.current_deck.cards[clean_name]
+            elif self.current_deck.hero and clean_name == self.current_deck.hero.name:
+                self.current_deck.hero = None
+
+        self.refresh_deck_display()
 
     def on_card_select(self, event):
         """Triggered when a user clicks a row in the table."""
