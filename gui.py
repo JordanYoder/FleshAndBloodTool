@@ -8,6 +8,8 @@ from sqlite.search_sqlite import SQLiteSearch
 from deck import Deck
 from card import Card
 import ctypes
+import re
+from tkinter import filedialog
 
 # Fix taskbar icon for Windows
 try:
@@ -157,6 +159,20 @@ class FabGui:
         self.deck_tree.bind("<BackSpace>", lambda e: self.remove_from_deck())
         self.deck_tree.bind("<Double-1>", self.on_deck_double_click)
 
+        # --- Inside setup_ui, under the Deck Building Sidebar section ---
+        button_container = ttk.Frame(deck_frame)
+        button_container.pack(fill="x", pady=5)
+
+        # --- Inside setup_ui, under the Deck Building Sidebar section ---
+        btn_f = ttk.Frame(deck_frame)
+        btn_f.pack(fill="x", pady=5)
+
+        ttk.Button(btn_f, text="📂 Load", command=self.load_deck).pack(side="left", expand=True, fill="x", padx=1)
+        ttk.Button(btn_f, text="💾 Save", command=self.save_deck).pack(side="left", expand=True, fill="x", padx=1)
+        ttk.Button(btn_f, text="📋 Paste", command=self.open_import_window).pack(side="left", expand=True, fill="x",
+                                                                                padx=1)
+        ttk.Button(deck_frame, text="🗑️ Clear Deck", command=self.clear_deck).pack(fill="x", pady=2)
+
         self.count_label = ttk.Label(deck_frame, text="Total Cards: 0 | Format: CC", font=("Arial", 10, "bold"))
         self.count_label.pack(pady=5)
 
@@ -245,6 +261,173 @@ class FabGui:
                 self.on_card_select(None)
         except Exception as e:
             messagebox.showerror("Search Error", str(e))
+
+    def open_import_window(self):
+        """Opens a pop-up window for pasting a deck list."""
+        import_win = tk.Toplevel(self.root)
+        import_win.title("Paste Deck List")
+        import_win.geometry("400x500")
+
+        ttk.Label(import_win, text="Paste list below (e.g., 3x Wounded Bull):", padding=10).pack()
+
+        # Text area for pasting
+        text_area = tk.Text(import_win, wrap="none", height=20)
+        text_area.pack(padx=10, pady=5, fill="both", expand=True)
+
+        # Import Button
+        btn = ttk.Button(import_win, text="Import into Deck",
+                         command=lambda: self.process_pasted_text(text_area.get("1.0", tk.END), import_win))
+        btn.pack(pady=10)
+
+    import re
+
+    def process_pasted_text(self, raw_text, window):
+        """Parses Fabrary exports and captures the deck name."""
+        lines = raw_text.split('\n')
+        added_count = 0
+        missing_cards = []
+
+        # 1. Reset current deck
+        self.current_deck.cards = {}
+        self.current_deck.hero = None
+        self.current_deck.name = "New Deck"  # Default if no name found
+
+        for line in lines:
+            line = line.strip()
+            if not line or "Made with" in line or "See the full" in line:
+                continue
+
+            # NEW: Capture Deck Name from the paste
+            if line.startswith("Name:"):
+                self.current_deck.name = line.replace("Name:", "").strip()
+                continue
+
+            # Handle Hero
+            if line.startswith("Hero:"):
+                hero_name = line.replace("Hero:", "").strip()
+                hero_obj = self.get_card_object_by_name(hero_name)
+                if hero_obj:
+                    self.current_deck.set_hero(hero_obj)
+                continue
+
+            # Regex to find: [Quantity]x [Card Name] ([Color])
+            # Example: "2x Autumn's Touch (red)" -> Groups: "2", "Autumn's Touch"
+            match = re.match(r'^(\d+)x?\s+([^(]+)', line)
+
+            if match:
+                qty = int(match.group(1))
+                # .strip() removes trailing spaces before the parentheses
+                name = match.group(2).strip()
+
+                # Use your existing helper to find the card object
+                card_obj = self.get_card_object_by_name(name)
+                if card_obj:
+                    for _ in range(qty):
+                        self.current_deck.add_card(card_obj)
+                    added_count += qty
+                else:
+                    missing_cards.append(name)
+
+        self.refresh_deck_display()
+        # Only destroy the window if it was provided (for the paste pop-up)
+        if window:
+            window.destroy()
+
+        if missing_cards:
+            messagebox.showwarning("Import Summary",
+                                   f"Imported {added_count} cards.\n\nCould not find in DB:\n" +
+                                   "\n".join(set(missing_cards)))
+        else:
+            messagebox.showinfo("Success", f"Successfully imported {added_count} cards!")
+
+    def clear_deck(self):
+        """Wipes all cards and the hero from the current deck."""
+        # Optional: Ask for confirmation so users don't accidentally delete their work
+        if messagebox.askyesno("Clear Deck", "Are you sure you want to delete all cards in this deck?"):
+            # 1. Reset the Logic
+            self.current_deck.cards = {}
+            self.current_deck.hero = None
+
+            # 2. Update the UI
+            self.refresh_deck_display()
+            print("Deck cleared.")
+
+    from tkinter import filedialog
+    import os
+
+    def save_deck(self):
+        """
+        Saves the deck directly to data/save_data/saved_decks
+        using a sanitized version of the deck name.
+        """
+        if not self.current_deck.cards and not self.current_deck.hero:
+            messagebox.showwarning("Save Error", "Your deck is empty!")
+            return
+
+        # 1. Setup the Path
+        base_path = os.path.dirname(__file__)
+        save_dir = os.path.join(base_path, "data", "save_data", "saved_decks")
+        os.makedirs(save_dir, exist_ok=True)
+
+        # 2. Sanitize the filename
+        # This turns "Calling: Hong Kong 1st" into "Calling Hong Kong 1st"
+        safe_name = self.sanitize_filename(self.current_deck.name)
+        file_path = os.path.join(save_dir, f"{safe_name}.txt")
+
+        # 3. Write Data
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"Name: {self.current_deck.name}\n")
+                f.write(f"Hero: {self.current_deck.hero.name if self.current_deck.hero else 'No Hero'}\n")
+                f.write(f"Format: {self.current_deck.format}\n\n")
+
+                f.write("Deck cards\n")
+                for name, data in sorted(self.current_deck.cards.items()):
+                    # Detect pitch for color tags
+                    pitch = getattr(data['obj'], 'pitch', None)
+                    tag = {1: " (red)", 2: " (yellow)", 3: " (blue)"}.get(pitch, "")
+                    f.write(f"{data['qty']}x {name}{tag}\n")
+
+            # Visual feedback without a dialog: update the status label or console
+            print(f"Deck saved to: {file_path}")
+            messagebox.showinfo("Saved", f"Deck saved as '{safe_name}.txt'")
+
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Could not save file: {e}")
+
+    def sanitize_filename(self, filename):
+        """Removes characters that are illegal in file names."""
+        # Strip out characters like < > : " / \ | ? *
+        return re.sub(r'[<>:"/\\|?*]', '', filename).strip()
+
+    def load_deck(self):
+        """Loads a saved deck file and populates the current deck list."""
+        # 1. Path to your saved decks
+        base_path = os.path.dirname(__file__)
+        save_dir = os.path.join(base_path, "data", "save_data", "saved_decks")
+
+        # 2. Open the file dialog
+        file_path = filedialog.askopenfilename(
+            initialdir=save_dir,
+            title="Load Saved Deck",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+
+        if not file_path:
+            return
+
+        try:
+            # 3. Read the content
+            with open(file_path, "r", encoding="utf-8") as f:
+                deck_content = f.read()
+
+            # 4. Use your existing parser to fill the deck
+            self.process_pasted_text(deck_content, window=None)
+
+            messagebox.showinfo("Loaded", f"Successfully loaded: {os.path.basename(file_path)}")
+
+        except Exception as e:
+            messagebox.showerror("Load Error", f"Could not load file: {e}")
 
 
 if __name__ == "__main__":
