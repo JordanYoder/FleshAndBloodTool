@@ -56,7 +56,8 @@ class FabGui:
 
     def add_to_deck(self):
         selected_ids = self.tree.selection()
-        if not selected_ids: return
+        if not selected_ids:
+            return
         for item_id in selected_ids:
             card_name = self.tree.item(item_id)['values'][0]
             card_obj = self.get_card_object_by_name(card_name)
@@ -200,7 +201,8 @@ class FabGui:
 
     def remove_from_deck(self, event=None):
         selected = self.deck_tree.selection()
-        if not selected: return
+        if not selected:
+            return
         selected_index = self.deck_tree.index(selected[0])
         card_name = self.deck_tree.item(selected[0])['values'][0]
         # Match the icon used in refresh_deck_display
@@ -223,7 +225,8 @@ class FabGui:
 
     def on_card_select(self, event):
         selected = self.tree.selection()
-        if not selected: return
+        if not selected:
+            return
         card_name = self.tree.item(selected[0])['values'][0]
         res = self.search_engine.conn.execute("SELECT image_url, local_path FROM cards WHERE name = ?",
                                               (card_name,)).fetchone()
@@ -248,7 +251,8 @@ class FabGui:
             self.img_label.config(image='', text="Image not available")
 
     def perform_search(self):
-        for item in self.tree.get_children(): self.tree.delete(item)
+        for item in self.tree.get_children():
+            self.tree.delete(item)
         filters = {k: v.get() for k, v in self.vars.items() if v.get() not in ["", False]}
         try:
             results = self.search_engine.advanced_search(filters)
@@ -278,8 +282,6 @@ class FabGui:
         btn = ttk.Button(import_win, text="Import into Deck",
                          command=lambda: self.process_pasted_text(text_area.get("1.0", tk.END), import_win))
         btn.pack(pady=10)
-
-    import re
 
     def process_pasted_text(self, raw_text, window):
         """Parses Fabrary exports and captures the deck name."""
@@ -351,9 +353,6 @@ class FabGui:
             # 2. Update the UI
             self.refresh_deck_display()
             print("Deck cleared.")
-
-    from tkinter import filedialog
-    import os
 
     def save_deck(self):
         """

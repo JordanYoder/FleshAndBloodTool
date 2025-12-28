@@ -29,8 +29,11 @@ class SQLiteSearch:
                 query += f" AND {s} = ?"
                 params.append(filters[s])
 
-        if filters.get('legal_cc'): query += " AND legal_cc = 1"
-        if filters.get('legal_blitz'): query += " AND legal_blitz = 1"
-        if filters.get('legal_silver_age'): query += " AND legal_silver_age = 1"
+        if filters.get('legal_cc'):
+            query += " AND legal_cc = 1"
+        if filters.get('legal_blitz'):
+            query += " AND legal_blitz = 1"
+        if filters.get('legal_silver_age'):
+            query += " AND legal_silver_age = 1"
 
         return self.conn.execute(query, params).fetchall()

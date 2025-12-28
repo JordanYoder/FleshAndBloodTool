@@ -1,6 +1,7 @@
 import json
 from card import Card
 
+
 class CardDatabase:
     def __init__(self, path="data/card.json"):
         self.cards = self._load_cards(path)

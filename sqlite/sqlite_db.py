@@ -34,7 +34,8 @@ def create_tables(conn):
 
 
 def populate_database():
-    if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
 
     conn = sqlite3.connect(DB_PATH)
     create_tables(conn)
@@ -70,7 +71,8 @@ def populate_database():
 
 def download_all_images():
     """Iterates through the DB and downloads missing images to data/images/"""
-    if not os.path.exists(IMAGES_DIR): os.makedirs(IMAGES_DIR)
+    if not os.path.exists(IMAGES_DIR):
+        os.makedirs(IMAGES_DIR)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -80,7 +82,8 @@ def download_all_images():
     for i, row in enumerate(cards):
         dest_path = os.path.join(IMAGES_DIR, row['local_path'])
 
-        if os.path.exists(dest_path): continue  # Skip if already downloaded
+        if os.path.exists(dest_path):
+            continue  # Skip if already downloaded
 
         try:
             print(f"[{i + 1}/{len(cards)}] Downloading: {row['name']}...", end="\r")
@@ -99,5 +102,4 @@ def download_all_images():
 if __name__ == "__main__":
     populate_database()
     # Uncomment the line below to download everything for offline use:
-    #download_all_images()
-    #download_all_images()
+    # download_all_images()

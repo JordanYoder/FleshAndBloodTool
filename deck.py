@@ -3,7 +3,6 @@ import os
 
 # Ensure Card can be found even if this is called from subfolders
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-from card import Card
 
 
 class Deck:
